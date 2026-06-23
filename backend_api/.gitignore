@@ -1,0 +1,7 @@
+# FILE: .gitignore
+# PATH: AgroSaarthi_AI/backend_api/.gitignore
+
+venv/
+__pycache__/
+*.pyc
+serviceAccountKey.json

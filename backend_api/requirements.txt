@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pydantic
+python-multipart
+requests
+langchain
+langchain-core
+firebase-admin
