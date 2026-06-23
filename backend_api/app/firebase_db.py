@@ -1,28 +1,41 @@
 # FILE: firebase_db.py
 # PATH: AgroSaarthi_AI/backend_api/app/firebase_db.py
-# PURPOSE: Firebase Firestore connection and data logging
+# PURPOSE: Firebase Firestore connection securely using Environment Variables
 
 import firebase_admin
 from firebase_admin import credentials, firestore
 import datetime
 import os
+import json
 
-# Check if the real key file exists (we will add this in Phase 11 Deployment)
-KEY_FILE_PATH = "serviceAccountKey.json"
+# Fetching the secret key from Render Environment Variables
+firebase_env = os.environ.get("FIREBASE_CREDENTIALS")
 
-if os.path.exists(KEY_FILE_PATH):
-    cred = credentials.Certificate(KEY_FILE_PATH)
-    firebase_admin.initialize_app(cred)
-    db = firestore.client()
-    USE_MOCK_DB = False
+if firebase_env:
+    try:
+        # Convert string back to JSON dictionary
+        cred_dict = json.loads(firebase_env)
+        cred = credentials.Certificate(cred_dict)
+        
+        # Check if already initialized to prevent crashes
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(cred)
+            
+        db = firestore.client()
+        USE_MOCK_DB = False
+        print("✅ SUCCESS: Connected to REAL Firebase Cloud Firestore!")
+    except Exception as e:
+        db = None
+        USE_MOCK_DB = True
+        print(f"❌ ERROR: Failed to parse Firebase Credentials: {e}")
 else:
     db = None
     USE_MOCK_DB = True
-    print("⚠️ WARNING: serviceAccountKey.json not found. Using MOCK Database mode for development.")
+    print("⚠️ WARNING: FIREBASE_CREDENTIALS env var not found. Using MOCK Database.")
 
 def save_disease_outbreak(disease_name: str, lat: float, lon: float, risk_level: str):
     """
-    Saves the detection event to Firebase. If no key is present, prints to console.
+    Saves the detection event to Firebase or Console depending on auth status.
     """
     record = {
         "disease": disease_name,
@@ -33,9 +46,8 @@ def save_disease_outbreak(disease_name: str, lat: float, lon: float, risk_level:
     }
     
     if USE_MOCK_DB:
-        # Dummy save for local development
-        print(f"🔥 [MOCK DB SAVE] New Outbreak Logged -> {record}")
-        return {"status": "mock_saved", "record_id": "dummy_12345"}
+        print(f"🔥 [MOCK DB SAVE] -> {record}")
+        return {"status": "mock_saved", "record_id": "dummy_123"}
     else:
         # Real save to Google Cloud Firestore
         doc_ref = db.collection(u'disease_outbreaks').document()
