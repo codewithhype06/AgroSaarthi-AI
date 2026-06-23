@@ -6,3 +6,4 @@ requests
 langchain
 langchain-core
 firebase-admin
+google-generativeai
