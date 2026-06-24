@@ -5,6 +5,7 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from pydantic import BaseModel
 import asyncio
+import random  # NEW: Added for dynamic ML demo
 from app.weather import get_weather_risk
 from app.rag_chatbot import get_agronomist_response
 from app.firebase_db import save_disease_outbreak
@@ -32,7 +33,7 @@ async def root():
 async def health_check():
     return {"status": "online", "service": "AgroSaarthi API"}
 
-# UPDATED: Predict Disease Endpoint
+# UPDATED: Predict Disease Endpoint with Dynamic Demo Output
 @app.post("/predict-disease")
 async def predict_disease(
     file: UploadFile = File(...),
@@ -40,10 +41,14 @@ async def predict_disease(
     longitude: float = Form(None)
 ):
     filename = file.filename
-    await asyncio.sleep(2) # Dummy delay
+    await asyncio.sleep(2) # Dummy delay for ML processing
     
-    predicted_disease = "Potato Late Blight"
-    risk_level = "High"
+    # NEW: Randomly select a disease to make the demo look real
+    diseases_list = ["Potato Late Blight", "Wheat Rust", "Rice Blast", "Tomato Early Blight"]
+    predicted_disease = random.choice(diseases_list)
+    
+    # Dynamic risk level based on disease name
+    risk_level = "High" if "Blight" in predicted_disease else "Medium"
     
     # DB Save Logic (Only if location is provided)
     db_response = None
@@ -54,7 +59,7 @@ async def predict_disease(
         "status": "success",
         "filename": filename,
         "prediction": predicted_disease,
-        "confidence_score": "94.5%",
+        "confidence_score": f"{random.uniform(85.0, 98.5):.1f}%", # Bonus: Dynamic accuracy score
         "database_log": db_response,
         "message": "Prediction successful and logged to DB."
     }
