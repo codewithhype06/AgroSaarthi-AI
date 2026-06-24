@@ -1,53 +1,47 @@
 # FILE: rag_chatbot.py
 # PATH: AgroSaarthi_AI/backend_api/app/rag_chatbot.py
-# PURPOSE: Direct REST API connection to Gemini (Bypassing SDK errors)
+# PURPOSE: GenAI Chatbot using ultra-fast Groq (LLaMA-3)
 
 import os
-import requests
+from groq import Groq
 
 # Fetch the secret API key from Render Environment Variables
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 def get_agronomist_response(disease_name: str, user_query: str) -> str:
-    if not GEMINI_API_KEY:
-        return "System Warning: Render par GEMINI_API_KEY environment variable set nahi hai."
+    if not GROQ_API_KEY:
+        return "System Warning: GROQ_API_KEY environment variable missing."
 
-    # Step 1: Prepare the AI Persona and Prompt
-    prompt = f"""
-    You are 'AgroSaarthi', an expert AI Agronomist working in India.
-    A farmer is asking about the following crop disease: '{disease_name}'
-    Their specific question is: '{user_query}'
+    # Initialize Groq Client
+    client = Groq(api_key=GROQ_API_KEY)
     
-    Instructions:
-    1. Provide a step-by-step treatment plan.
-    2. Include both organic and chemical methods if applicable.
-    3. The language MUST be simple Hinglish (Hindi written in English alphabet), easily understandable by an Indian farmer.
-    4. Keep it friendly and professional. Start with "Namaste Kisan Bhai!".
+    # System Prompt to set the persona
+    system_prompt = """
+    You are 'AgroSaarthi', an expert AI Agronomist working in India.
+    Your job is to provide treatment plans for crop diseases.
+    
+    CRITICAL RULES:
+    1. You MUST reply ONLY in simple Hinglish (Hindi written in English alphabet).
+    2. Start your response with "Namaste Kisan Bhai!".
+    3. Keep it brief, actionable, and include chemical/organic names if necessary.
     """
     
-    # Step 2: Direct REST API URL for Gemini 1.5 Flash
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-    
-    # Step 3: Prepare the exact JSON structure Google expects
-    payload = {
-        "contents": [{
-            "parts": [{"text": prompt}]
-        }]
-    }
-    
+    user_prompt = f"Disease detected: '{disease_name}'. Farmer's question: '{user_query}'"
+
     try:
-        # Step 4: Make the direct network request
-        response = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
+        # Call Groq's lightning-fast LLaMA-3 model
+        chat_completion = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            model="llama3-8b-8192", # Extremely fast and smart model
+            temperature=0.5,
+            max_tokens=250,
+        )
         
-        # Step 5: Check if successful
-        if response.status_code == 200:
-            data = response.json()
-            # Extracting the text from Google's JSON format
-            bot_text = data["candidates"][0]["content"]["parts"][0]["text"]
-            return bot_text.strip()
-        else:
-            # If Google rejects the key or model, this will print the exact reason
-            return f"DEBUG ERROR (API REST): Code {response.status_code} -> {response.text}"
-            
+        # Extract and return the response
+        return chat_completion.choices[0].message.content.strip()
+        
     except Exception as e:
-        return f"DEBUG ERROR (Network): {str(e)}"
+        return f"DEBUG ERROR (Groq API): {str(e)}"
