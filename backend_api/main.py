@@ -1,13 +1,14 @@
 # FILE: main.py
 # PATH: AgroSaarthi_AI/backend_api/main.py
-# PURPOSE: Entry point for AgroSaarthi AI Backend Server (Hugging Face Live Debug Mode)
+# PURPOSE: Entry point for AgroSaarthi AI Backend Server (OFFICIAL HUGGING FACE CLIENT)
 
 from fastapi import FastAPI, UploadFile, File, Form
 from pydantic import BaseModel
 import asyncio
 import random
-import requests
-import base64
+import os
+import tempfile
+from gradio_client import Client, handle_file
 from app.weather import get_weather_risk
 from app.rag_chatbot import get_agronomist_response
 from app.firebase_db import save_disease_outbreak
@@ -35,42 +36,39 @@ async def root():
 async def health_check():
     return {"status": "online", "service": "AgroSaarthi API"}
 
-# --- REAL ML API CONNECTION (WITH MULTI-ENDPOINT DEBUG) ---
+# --- REAL ML API CONNECTION (OFFICIAL GRADIO CLIENT) ---
+# Server start hote hi Hugging Face se VIP connection bana lo
+try:
+    hf_client = Client("NikhilShines/AgroSaarthi-ML-API")
+except Exception as e:
+    hf_client = None
+
 def get_real_prediction(image_bytes: bytes) -> str:
+    if not hf_client:
+        return "ERR_HF_CONNECTION: Client init failed"
+    
     try:
-        # Photo ko Base64 string mein convert karna
-        encoded_image = base64.b64encode(image_bytes).decode('utf-8')
-        data_uri = f"data:image/jpeg;base64,{encoded_image}"
+        # Step 1: Photo ko ek temporary file mein save karein (Gradio ko path chahiye)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_img:
+            temp_img.write(image_bytes)
+            temp_img_path = temp_img.name
 
-        # Attempt 1: Naye Gradio versions ka standard /run/predict endpoint
-        url_run = "https://nikhilshines-agrosaarthi-ml-api.hf.space/run/predict"
-        response = requests.post(url_run, json={"data": [data_uri]}, timeout=15)
-
-        if response.status_code == 200:
-            res_json = response.json()
-            if "data" in res_json:
-                return res_json["data"][0]
-            else:
-                return f"HF_JSON_ERR: 'data' key missing -> {str(res_json)[:60]}"
+        # Step 2: Official Hugging Face library se photo bhejein
+        result = hf_client.predict(
+            image=handle_file(temp_img_path),
+            api_name="/predict"
+        )
         
-        # Attempt 2: Agar /run fail ho toh backup /api/predict endpoint try karein
-        url_api = "https://nikhilshines-agrosaarthi-ml-api.hf.space/api/predict"
-        response_api = requests.post(url_api, json={"data": [data_uri]}, timeout=15)
+        # Step 3: Server ka storage bachane ke liye file delete kar dein
+        os.remove(temp_img_path)
         
-        if response_api.status_code == 200:
-            res_json = response_api.json()
-            if "data" in res_json:
-                return res_json["data"][0]
-            else:
-                return f"HF_API_JSON_ERR: 'data' key missing -> {str(res_json)[:60]}"
-        
-        # Agar dono servers response na dein, toh raw status code return karein
-        return f"HF_CONN_ERR: /run code {response.status_code} | /api code {response_api.status_code}"
+        # Asli bimari ka naam return karein
+        return str(result).strip()
 
     except Exception as e:
-        return f"BACKEND_EXCEPTION: {str(e)}"
+        return f"CLIENT_EXCEPTION: {str(e)}"
 
-# UPDATED: Predict Disease Endpoint with REAL Custom ML Output (DEBUG ENABLED)
+# UPDATED: Predict Disease Endpoint with REAL Custom ML Output
 @app.post("/predict-disease")
 async def predict_disease(
     file: UploadFile = File(...),
@@ -79,18 +77,13 @@ async def predict_disease(
 ):
     filename = file.filename
     
-    # 1. App se aayi hui photo ko read karo
+    # 1. Read the image
     image_bytes = await file.read()
     
-    # 2. Photo ko apne train kiye hue AI Model par bhejo
+    # 2. Get Real Prediction from our Custom AI Model
     predicted_disease = get_real_prediction(image_bytes)
     
-    # 3. 🛠️ DEBUG OVERRIDE: Fallback ko temporarily comment kar rahe hain!
-    # Taaki asli error mask na ho aur seedha phone screen par dikhe ki kya dikkat hai.
-    # if "Error" in predicted_disease or "ERR" in predicted_disease or "EXCEPTION" in predicted_disease:
-    #     predicted_disease = "Potato Late Blight"
-    
-    # 4. Risk Level setting
+    # 3. Risk Level setting
     if "Healthy" in predicted_disease:
         risk_level = "Low"
     elif "Blight" in predicted_disease or "Rust" in predicted_disease or "Spot" in predicted_disease:
@@ -98,7 +91,7 @@ async def predict_disease(
     else:
         risk_level = "Medium"
     
-    # 5. Firebase DB Save Logic
+    # 4. Firebase DB Save Logic
     db_response = None
     if latitude is not None and longitude is not None and "ERR" not in predicted_disease and "EXCEPTION" not in predicted_disease:
         db_response = save_disease_outbreak(predicted_disease, latitude, longitude, risk_level)
@@ -109,7 +102,7 @@ async def predict_disease(
         "prediction": predicted_disease,
         "confidence_score": f"{random.uniform(93.0, 98.5):.1f}%", 
         "database_log": db_response,
-        "message": "Prediction processed through Debug Pipeline."
+        "message": "Real prediction processed via Hugging Face Client."
     }
 
 @app.post("/weather-risk")
