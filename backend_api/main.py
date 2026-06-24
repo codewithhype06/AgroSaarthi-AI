@@ -40,27 +40,29 @@ def get_real_prediction(image_bytes: bytes) -> str:
     try:
         from gradio_client import Client, handle_file
         
-        # Har request par fresh client connect karega
-        hf_client = Client("NikhilShines/AgroSaarthi-ML-API", verbose=False)
+        # 🛠️ THE MASTER FIX: Naam ki jagah seedha Raw Server URL daala hai
+        # Yeh Hugging Face Hub API ko bypass karke direct engine se connect karega
+        DIRECT_SERVER_URL = "https://nikhilshines-agrosaarthi-ml-api.hf.space/"
+        
+        hf_client = Client(DIRECT_SERVER_URL, verbose=False)
         
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_img:
             temp_img.write(image_bytes)
             temp_img_path = temp_img.name
 
         try:
-            # First try: API name
+            # First try: Direct API name
             result = hf_client.predict(handle_file(temp_img_path), api_name="/predict")
         except Exception:
-            # Second try: Index fallback
+            # Second try: Index 0 fallback
             result = hf_client.predict(handle_file(temp_img_path), fn_index=0)
             
         os.remove(temp_img_path)
         
-        # Hugging Face se jo raw string aayegi, strictly wahi return hogi
+        # Asli model ka result return hoga
         return str(result).strip()
 
     except Exception as e:
-        # Koi bhi issue aane par real exception return karega, koi dummy data nahi
         return f"REAL_HF_ERROR: {str(e)}"
 
 # UPDATED: Predict Disease Endpoint
