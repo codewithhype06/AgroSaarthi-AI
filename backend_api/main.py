@@ -53,10 +53,10 @@ def get_real_prediction(image_bytes: bytes) -> str:
             temp_img.write(image_bytes)
             temp_img_path = temp_img.name
 
-        # Step 2: Official Hugging Face library se photo bhejein
+        # Step 2: 🛠️ FIX - API naam ki jagah seedha 0th function (pehle function) ko hit karein
         result = hf_client.predict(
-            image=handle_file(temp_img_path),
-            api_name="/predict"
+            handle_file(temp_img_path),
+            fn_index=0
         )
         
         # Step 3: Server ka storage bachane ke liye file delete kar dein
