@@ -1,10 +1,9 @@
 # FILE: main.py
 # PATH: AgroSaarthi_AI/backend_api/main.py
-# PURPOSE: 100% Bulletproof Local TFLite Execution (Render Path Bug Fixed)
+# PURPOSE: Production-Grade TFLite Execution (Strict, Error-Free, Crash-Free)
 
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from pydantic import BaseModel
-import random
 import io
 import os
 import numpy as np
@@ -14,7 +13,11 @@ from app.weather import get_weather_risk
 from app.rag_chatbot import get_agronomist_response
 from app.firebase_db import save_disease_outbreak
 
-app = FastAPI(title="AgroSaarthi AI API", version="1.0.0")
+app = FastAPI(
+    title="AgroSaarthi AI API", 
+    description="VisionX Production Backend",
+    version="1.0.0"
+)
 
 class LocationData(BaseModel):
     latitude: float
@@ -24,38 +27,47 @@ class ChatRequest(BaseModel):
     disease_name: str
     user_query: str
 
-# 38 PlantVillage Classes
 CLASS_NAMES = ['Apple - Scab', 'Apple - Black Rot', 'Apple - Cedar Rust', 'Apple - Healthy', 'Blueberry - Healthy', 'Cherry - Powdery Mildew', 'Cherry - Healthy', 'Corn - Cercospora Leaf Spot', 'Corn - Common Rust', 'Corn - Northern Leaf Blight', 'Corn - Healthy', 'Grape - Black Rot', 'Grape - Esca', 'Grape - Leaf Blight', 'Grape - Healthy', 'Orange - Citrus Greening', 'Peach - Bacterial Spot', 'Peach - Healthy', 'Pepper - Bacterial Spot', 'Pepper - Healthy', 'Potato - Early Blight', 'Potato Late Blight', 'Potato - Healthy', 'Raspberry - Healthy', 'Soybean - Healthy', 'Squash - Powdery Mildew', 'Strawberry - Leaf Scorch', 'Strawberry - Healthy', 'Tomato - Bacterial Spot', 'Tomato Early Blight', 'Tomato - Late Blight', 'Tomato - Leaf Mold', 'Tomato - Septoria Leaf Spot', 'Tomato - Spider Mites', 'Tomato - Target Spot', 'Tomato - Yellow Leaf Curl Virus', 'Tomato - Mosaic Virus', 'Tomato - Healthy']
 
-# 🛠️ THE PATH FIX: Render ko exact location batana
+# --- STRICT STARTUP INITIALIZATION ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "agrosaarthi.tflite")
 
-# Load Compressed ML Model Locally!
-interpreter = tflite.Interpreter(model_path=MODEL_PATH)
-interpreter.allocate_tensors()
-input_details = interpreter.get_input_details()
-output_details = interpreter.get_output_details()
+# Strict check: Server start hone se pehle model file confirm karega
+if not os.path.exists(MODEL_PATH):
+    raise RuntimeError(f"CRITICAL SYSTEM ERROR: TFLite model file missing at {MODEL_PATH}. Check your Git upload!")
 
-def get_real_prediction(image_bytes: bytes) -> str:
+# Load model to memory at startup (Production Best Practice)
+try:
+    interpreter = tflite.Interpreter(model_path=MODEL_PATH)
+    interpreter.allocate_tensors()
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+except Exception as e:
+    raise RuntimeError(f"CRITICAL SYSTEM ERROR: Failed to load TFLite model. Details: {str(e)}")
+
+def process_image_and_predict(image_bytes: bytes) -> tuple[str, float]:
     try:
-        # 1. Prepare Image
+        # 1. Standardize Image Input
         image = Image.open(io.BytesIO(image_bytes)).convert('RGB')
         image = image.resize((224, 224))
         img_array = np.array(image, dtype=np.float32) / 255.0
         img_array = np.expand_dims(img_array, axis=0)
 
-        # 2. Run Local Prediction
+        # 2. Execute TFLite Model Local Engine
         interpreter.set_tensor(input_details[0]['index'], img_array)
         interpreter.invoke()
 
-        # 3. Get Results
+        # 3. Extract Prediction and Confidence
         output_data = interpreter.get_tensor(output_details[0]['index'])
-        predicted_idx = np.argmax(output_data[0])
-        return CLASS_NAMES[predicted_idx]
-
+        predicted_idx = int(np.argmax(output_data[0]))
+        confidence = float(np.max(output_data[0])) * 100.0
+        
+        return CLASS_NAMES[predicted_idx], confidence
     except Exception as e:
-        return f"LOCAL_ML_ERROR: {str(e)}"
+        raise HTTPException(status_code=500, detail=f"Image processing failed: {str(e)}")
+
+# --- ENDPOINTS ---
 
 @app.post("/predict-disease")
 async def predict_disease(
@@ -63,42 +75,40 @@ async def predict_disease(
     latitude: float = Form(None),
     longitude: float = Form(None)
 ):
-    filename = file.filename
     image_bytes = await file.read()
     
-    # 100% Asli Local AI
-    predicted_disease = get_real_prediction(image_bytes)
+    # Core AI Logic
+    predicted_disease, confidence = process_image_and_predict(image_bytes)
     
-    if "LOCAL_ML_ERROR" in predicted_disease:
-        risk_level = "Unknown"
-        message_log = "Error in local processing."
+    # Risk Level Assessment
+    if "Healthy" in predicted_disease:
+        risk_level = "Low"
+    elif any(keyword in predicted_disease for keyword in ["Blight", "Rust", "Spot", "Mold", "Rot", "Virus"]):
+        risk_level = "High"
     else:
-        message_log = "Real prediction successful via Local TFLite Model."
-        if "Healthy" in predicted_disease:
-            risk_level = "Low"
-        elif "Blight" in predicted_disease or "Rust" in predicted_disease or "Spot" in predicted_disease:
-            risk_level = "High"
-        else:
-            risk_level = "Medium"
+        risk_level = "Medium"
     
+    # Database Logging
     db_response = None
-    if latitude is not None and longitude is not None and risk_level != "Unknown":
+    if latitude is not None and longitude is not None:
         db_response = save_disease_outbreak(predicted_disease, latitude, longitude, risk_level)
     
     return {
         "status": "success",
-        "filename": filename,
+        "filename": file.filename,
         "prediction": predicted_disease,
-        "confidence_score": f"{random.uniform(94.0, 98.5):.1f}%", 
+        "confidence_score": f"{confidence:.1f}%", 
         "database_log": db_response,
-        "message": message_log
+        "message": "Real prediction successful via Local TFLite Engine."
     }
 
 @app.get("/")
-async def root(): return {"status": "success"}
+async def root(): 
+    return {"status": "success", "message": "VisionX AI Backend Online"}
 
 @app.get("/health")
-async def health_check(): return {"status": "online"}
+async def health_check(): 
+    return {"status": "online", "model_loaded": True}
 
 @app.post("/weather-risk")
 async def calculate_weather_risk(location: LocationData):
