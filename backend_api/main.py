@@ -1,11 +1,12 @@
 # FILE: main.py
 # PATH: AgroSaarthi_AI/backend_api/main.py
-# PURPOSE: 100% Bulletproof Local TFLite Execution (No 3rd Party APIs)
+# PURPOSE: 100% Bulletproof Local TFLite Execution (Render Path Bug Fixed)
 
 from fastapi import FastAPI, UploadFile, File, Form
 from pydantic import BaseModel
 import random
 import io
+import os
 import numpy as np
 from PIL import Image
 import tflite_runtime.interpreter as tflite
@@ -26,8 +27,12 @@ class ChatRequest(BaseModel):
 # 38 PlantVillage Classes
 CLASS_NAMES = ['Apple - Scab', 'Apple - Black Rot', 'Apple - Cedar Rust', 'Apple - Healthy', 'Blueberry - Healthy', 'Cherry - Powdery Mildew', 'Cherry - Healthy', 'Corn - Cercospora Leaf Spot', 'Corn - Common Rust', 'Corn - Northern Leaf Blight', 'Corn - Healthy', 'Grape - Black Rot', 'Grape - Esca', 'Grape - Leaf Blight', 'Grape - Healthy', 'Orange - Citrus Greening', 'Peach - Bacterial Spot', 'Peach - Healthy', 'Pepper - Bacterial Spot', 'Pepper - Healthy', 'Potato - Early Blight', 'Potato Late Blight', 'Potato - Healthy', 'Raspberry - Healthy', 'Soybean - Healthy', 'Squash - Powdery Mildew', 'Strawberry - Leaf Scorch', 'Strawberry - Healthy', 'Tomato - Bacterial Spot', 'Tomato Early Blight', 'Tomato - Late Blight', 'Tomato - Leaf Mold', 'Tomato - Septoria Leaf Spot', 'Tomato - Spider Mites', 'Tomato - Target Spot', 'Tomato - Yellow Leaf Curl Virus', 'Tomato - Mosaic Virus', 'Tomato - Healthy']
 
+# 🛠️ THE PATH FIX: Render ko exact location batana
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "agrosaarthi.tflite")
+
 # Load Compressed ML Model Locally!
-interpreter = tflite.Interpreter(model_path="agrosaarthi.tflite")
+interpreter = tflite.Interpreter(model_path=MODEL_PATH)
 interpreter.allocate_tensors()
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
