@@ -15,7 +15,7 @@ import sys
 import io
 import hashlib
 import logging
-
+import tensorflow.lite as tflite
 import numpy as np
 from PIL import Image
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
