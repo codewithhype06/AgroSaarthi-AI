@@ -37,7 +37,7 @@ async def health_check():
 
 # --- REAL ML API CONNECTION ---
 # ⚠️ IMPORTANT: Niche apna Hugging Face username daalein
-HF_ML_API_URL = "https://huggingface.co/spaces/NikhilShines/AgroSaarthi-ML-API"
+HF_ML_API_URL = "https://nikhilshines-agrosaarthi-ml-api.hf.space/api/predict"
 
 def get_real_prediction(image_bytes: bytes) -> str:
     try:
