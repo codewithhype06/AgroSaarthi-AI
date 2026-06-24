@@ -213,4 +213,5 @@ async def ask_agronomist(chat_data: ChatRequest):
         response = get_agronomist_response(chat_data.disease_name, chat_data.user_query)
         return {"status": "success", "bot_response": response}
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Chatbot unavailable: {e}")
+        # 503 ki jagah 200 return karo with error detail
+        return {"status": "error", "bot_response": f"EXACT ERROR: {str(e)}"}
