@@ -62,7 +62,7 @@ YOUR RESPONSE RULES:
             ],
             model="llama-3.1-8b-instant", # Extremely fast and smart model
             temperature=0.5,
-            max_tokens=250,
+            max_tokens=2048,
         )
         
         # Extract and return the response
